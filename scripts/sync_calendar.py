@@ -39,28 +39,13 @@ def get_feed(url):
         raise ValueError(
             "El secreto debe contener un enlace HTTPS de Google Apps Script"
         )
-    canonical = parsed.hostname == "script.google.com" and (
-        re.fullmatch(r"/macros/s/[^/]+/exec", parsed.path) is not None
-        or re.fullmatch(r"/a/macros/[^/]+/s/[^/]+/exec", parsed.path) is not None
-    )
-    redirected = (
-        parsed.hostname == "script.googleusercontent.com"
-        and parsed.path == "/macros/echo"
-    )
-    if not (canonical or redirected):
-        raise ValueError(
-            "Ruta de Google no reconocida: utiliza la URL de despliegue terminada en /exec?key=..."
-        )
-    if not parsed.query:
-        raise ValueError(
-            "La URL no tiene parámetros privados; copia el enlace completo generado por mostrarEnlacePrivado"
-        )
-    if redirected:
-        print(
-            "Aviso: se está usando el enlace redirigido de Google; "
-            "puede caducar. Para uso permanente, guarda la URL original "
-            "de script.google.com terminada en /exec?key=..."
-        )
+    # Las URL de Apps Script pueden cambiar de ruta al abrirse desde un
+    # navegador o una cuenta de Google Workspace. No dependemos de esa ruta:
+    # comprobamos que el dominio sea oficial y validamos el JSON recibido.
+    if not parsed.path or parsed.path == "/":
+        raise ValueError("La URL de Google no incluye la ruta del servicio")
+    if parsed.hostname == "script.googleusercontent.com":
+        print("Google utiliza un enlace redirigido; para sincronización duradera se recomienda el enlace /exec original.")
 
     request = urllib.request.Request(url, headers={
         "User-Agent": "ASIR-HUB/1.0",
