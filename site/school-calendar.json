@@ -1,0 +1,74 @@
+{
+  "course": "2026-2027",
+  "area": "Elche (casco urbano), Comunitat Valenciana",
+  "description": "Días no lectivos y avisos verificables para el calendario común de clase. No incluye cambios internos específicos del centro.",
+  "sources": [
+    {
+      "label": "Ayuntamiento de Elche, calendario 2026-2027",
+      "url": "https://t.me/s/ajuntamentelx?q=%23Educaci%C3%B3n"
+    },
+    {
+      "label": "Generalitat Valenciana, calendario escolar 2026-2027",
+      "url": "https://sede.gva.es/en/detall-tramit?id_proc=G25685"
+    },
+    {
+      "label": "Calendario definitivo de Elche 2026-2027",
+      "url": "https://www.elperiodic.com/elx/elche-aprueba-calendario-escolar-definitivo-para-curso-2026-2027-lectivo-semana-santa_1090237"
+    }
+  ],
+  "holidays": [
+    {
+      "start": "2026-10-09",
+      "end": "2026-10-09",
+      "name": "Día de la Comunitat Valenciana"
+    },
+    {
+      "start": "2026-10-12",
+      "end": "2026-10-12",
+      "name": "Fiesta Nacional de España"
+    },
+    {
+      "start": "2026-12-07",
+      "end": "2026-12-07",
+      "name": "Día no lectivo local de Elche"
+    },
+    {
+      "start": "2026-12-08",
+      "end": "2026-12-08",
+      "name": "Inmaculada Concepción"
+    },
+    {
+      "start": "2026-12-23",
+      "end": "2027-01-06",
+      "name": "Vacaciones de Navidad"
+    },
+    {
+      "start": "2027-02-12",
+      "end": "2027-02-12",
+      "name": "Día no lectivo local de Elche"
+    },
+    {
+      "start": "2027-03-19",
+      "end": "2027-03-19",
+      "name": "San José"
+    },
+    {
+      "start": "2027-03-24",
+      "end": "2027-04-05",
+      "name": "Vacaciones de Pascua (calendario local de Elche)"
+    },
+    {
+      "start": "2027-05-03",
+      "end": "2027-05-03",
+      "name": "Día no lectivo local de Elche"
+    }
+  ],
+  "strikes": [
+    {
+      "date": "2026-11-11",
+      "name": "Huelga general convocada el 11 de noviembre",
+      "detail": "Una convocatoria de huelga no implica automáticamente la suspensión de las clases. Consulta a la dirección del centro.",
+      "source": "https://www.rtve.es/noticias/20261014/estudiantes-huelga-general-11-noviembre/17266929.shtml"
+    }
+  ]
+}
