@@ -43,7 +43,7 @@
 
         <section class="metrics" aria-label="Resumen">
           <div class="metric"><div class="metric-icon purple" aria-hidden="true">▦</div><div><span class="metric-number" id="metric-total">—</span><span class="metric-label">Próximos eventos</span></div></div>
-          <div class="metric"><div class="metric-icon orange" aria-hidden="true">✎</div><div><span class="metric-number" id="metric-entregas">—</span><span class="metric-label">Entregas pendientes</span></div></div>
+          <div class="metric"><div class="metric-icon orange" aria-hidden="true">✎</div><div><span class="metric-number" id="metric-entregas">—</span><span class="metric-label">Próximas entregas</span></div></div>
           <div class="metric"><div class="metric-icon pink" aria-hidden="true">◉</div><div><span class="metric-number" id="metric-examenes">—</span><span class="metric-label">Exámenes próximos</span></div></div>
         </section>
 
@@ -58,6 +58,7 @@
 
           <section class="panel upcoming-panel" id="proximas" aria-labelledby="upcoming-title">
             <div class="panel-heading"><div><span class="section-eyebrow">NO TE PIERDAS NADA</span><h2 id="upcoming-title">Próximos eventos</h2></div><span class="count-chip" id="list-count">0</span></div>
+            <button id="add-exam" type="button" class="add-exam-button" hidden>＋ Añadir examen manual</button>
             <label class="search-box"><span aria-hidden="true">⌕</span><input id="event-search" type="search" placeholder="Buscar tarea o examen..." aria-label="Buscar eventos"></label>
             <div class="filters" role="group" aria-label="Filtrar eventos">
               <button type="button" class="filter active" data-filter="todos">Todos</button>
@@ -69,6 +70,23 @@
             <div id="events-list" class="events-list" aria-live="polite"><div class="empty-state">Cargando eventos...</div></div>
           </section>
         </div>
+
+        <dialog id="add-exam-dialog" class="exam-dialog" aria-labelledby="add-exam-title">
+          <form id="add-exam-form">
+            <div class="exam-dialog-heading">
+              <div><span class="section-eyebrow">CALENDARIO COMPARTIDO</span><h2 id="add-exam-title">Añadir examen</h2></div>
+              <button id="close-exam" class="close-exam" type="button" aria-label="Cerrar">×</button>
+            </div>
+            <label class="exam-field">Asignatura o nombre del examen
+              <input id="exam-name" name="name" type="text" maxlength="100" placeholder="Ej.: Examen de Seguridad" required autocomplete="off">
+            </label>
+            <label class="exam-field">Fecha del examen
+              <input id="exam-date" name="date" type="date" required>
+            </label>
+            <p class="exam-help">Se abrirá Google Calendar. Antes de pulsar «Guardar», selecciona el calendario <strong>ASIR HUB - Exámenes</strong> (no tu calendario personal). Solo los delegados con permiso podrán añadir exámenes compartidos.</p>
+            <div class="exam-buttons"><button type="button" id="cancel-exam" class="subtle-button">Cancelar</button><button type="submit" class="add-exam-button">Continuar en Google Calendar ↗</button></div>
+          </form>
+        </dialog>
 
         <footer class="footer"><span>ASIR HUB · Hecho para la clase, con ❤️ y café.</span><span id="last-sync">Esperando sincronización con Aules</span></footer>
       </div>
