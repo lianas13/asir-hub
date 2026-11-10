@@ -27,57 +27,95 @@ def event_type(title):
     return "examen" if EXAM.search(title) else "entrega" if TASK.search(title) else "otro"
 
 
+class NoRedirects(urllib.request.HTTPRedirectHandler):
+    """Inspect Apps Script's temporary redirect before retrieving its JSON."""
+    def redirect_request(self, request, fp, code, msg, headers, newurl):
+        return None
+
+
+def _get_json_google(url):
+    """Follow only Google's HTTPS hosts, retrying transient ContentService 404s."""
+    opener = urllib.request.build_opener(NoRedirects())
+    headers = {
+        "User-Agent": "Mozilla/5.0 (compatible; ASIR-HUB/1.0)",
+        "Accept": "application/json, text/plain, */*",
+    }
+    current = url
+    for redirect_number in range(6):
+        parsed = urllib.parse.urlparse(current)
+        if parsed.scheme != "https" or parsed.hostname not in (
+                "script.google.com", "script.googleusercontent.com"):
+            raise ValueError("Redirección fuera de los servidores autorizados de Google")
+
+        for echo_try in range(3):
+            request = urllib.request.Request(current, headers=headers)
+            try:
+                with opener.open(request, timeout=40) as response:
+                    raw = response.read(2_000_001)
+                    if len(raw) > 2_000_000:
+                        raise ValueError("La respuesta de Google supera el límite de tamaño")
+                    if not raw.lstrip().startswith(b"{"):
+                        raise RuntimeError("Google respondió con una página HTML en vez de JSON")
+                    return json.loads(raw)
+            except urllib.error.HTTPError as exc:
+                if exc.code in (301, 302, 303, 307, 308):
+                    location = exc.headers.get("Location")
+                    if not location:
+                        raise RuntimeError("Google redirige sin indicar destino") from None
+                    current = urllib.parse.urljoin(current, location)
+                    next_host = urllib.parse.urlparse(current).hostname
+                    if next_host not in ("script.google.com", "script.googleusercontent.com"):
+                        raise ValueError("Redirección a un dominio no permitido") from None
+                    break
+                # Google Apps Script ContentService returns a one-time URL.
+                # Its content may not be ready at the time of the redirect.
+                if exc.code == 404 and parsed.hostname == "script.googleusercontent.com" and echo_try < 2:
+                    print(f"Google ContentService todavía no ha servido el JSON; reintento {echo_try + 1}/2")
+                    time.sleep(3)
+                    continue
+                raise RuntimeError(
+                    "HTTP " + str(exc.code) + " en " +
+                    ("la redirección temporal de Google" if parsed.hostname == "script.googleusercontent.com"
+                     else "el enlace principal de Apps Script")
+                ) from None
+        else:
+            raise RuntimeError("No se ha podido recuperar el contenido temporal de Google")
+    raise RuntimeError("Google ha generado demasiadas redirecciones")
+
+
 def get_feed(url):
-    # Algunas personas copian la URL que el navegador muestra después de una
-    # redirección de Apps Script (script.googleusercontent.com/macros/echo).
-    # También puede existir la variante /a/macros/ para Google Workspace.
-    # No imprimimos nunca query strings ni tokens.
+    # Aceptamos enlaces de implementación (/exec) y redirigidos, pero nunca
+    # imprimimos rutas, parámetros, tokens ni valores privados.
     url = url.strip().strip('"').strip("'").strip()
     parsed = urllib.parse.urlparse(url)
     if parsed.scheme != "https" or parsed.hostname not in (
             "script.google.com", "script.googleusercontent.com"):
-        raise ValueError(
-            "El secreto debe contener un enlace HTTPS de Google Apps Script"
-        )
-    # Las URL de Apps Script pueden cambiar de ruta al abrirse desde un
-    # navegador o una cuenta de Google Workspace. No dependemos de esa ruta:
-    # comprobamos que el dominio sea oficial y validamos el JSON recibido.
+        raise ValueError("El enlace debe ser HTTPS de Google Apps Script")
     if not parsed.path or parsed.path == "/":
-        raise ValueError("La URL de Google no incluye la ruta del servicio")
+        raise ValueError("El enlace no contiene la dirección de la aplicación web")
     if parsed.hostname == "script.googleusercontent.com":
-        print("Google utiliza un enlace redirigido; para sincronización duradera se recomienda el enlace /exec original.")
+        print("Aviso: el secreto apunta a un enlace temporal de Google; guarda la URL original /exec?key=...")
 
-    request = urllib.request.Request(url, headers={
-        "User-Agent": "ASIR-HUB/1.0",
-        "Accept": "application/json",
-    })
-    for attempt in range(3):
+    for attempt in range(4):
         try:
-            with urllib.request.urlopen(request, timeout=40) as response:
-                final_host = urllib.parse.urlparse(response.geturl()).hostname
-                if final_host not in ("script.google.com", "script.googleusercontent.com"):
-                    raise ValueError("Redirección fuera de los servidores de Google")
-                raw = response.read(2_000_001)
-                if len(raw) > 2_000_000:
-                    raise ValueError("Respuesta demasiado grande")
-            data = json.loads(raw)
+            data = _get_json_google(url)
             if not isinstance(data, dict) or data.get("status") != "ready":
-                raise ValueError("Google no ha autorizado la lectura del calendario")
+                raise ValueError("Google no autoriza la lectura (comprueba la implementación y la clave)")
             if not isinstance(data.get("events"), list):
-                raise ValueError("La respuesta no contiene una lista de eventos")
+                raise ValueError("Google no ha devuelto una lista de eventos")
             return data["events"]
-        except urllib.error.HTTPError as exc:
-            if exc.code not in (404, 408, 429, 500, 502, 503, 504) or attempt == 2:
-                raise RuntimeError(f"Google ha devuelto HTTP {exc.code}") from None
-        except (urllib.error.URLError, TimeoutError) as exc:
-            if attempt == 2:
-                raise RuntimeError("No se pudo establecer conexión con Google") from None
-        except json.JSONDecodeError:
-            if attempt == 2:
-                raise RuntimeError("Google devolvió una respuesta que no es JSON") from None
-        print(f"Reintentando lectura de Google Calendar ({attempt + 2}/3).")
-        time.sleep(2 * (attempt + 1))
-    raise RuntimeError("Error de conexión")
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, RuntimeError) as exc:
+            if isinstance(exc, RuntimeError):
+                detail = str(exc)
+            elif isinstance(exc, json.JSONDecodeError):
+                detail = "Google ha devuelto un JSON mal formado"
+            else:
+                detail = "Fallo de red al consultar Google"
+            if attempt == 3:
+                raise RuntimeError(detail) from None
+            print(f"Conexión a Google no disponible ({detail}). Nueva consulta {attempt + 2}/4")
+            time.sleep(3 * (attempt + 1))
+    raise RuntimeError("No se han podido consultar los eventos de Google")
 
 
 def normalize(events):
