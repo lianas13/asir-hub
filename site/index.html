@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101a32">
+  <meta name="description" content="ASIR HUB: exámenes, entregas y calendario compartido de clase.">
+  <title>ASIR HUB | Calendario de clase</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Navegación">
+      <div class="brand"><div class="brand-mark" aria-hidden="true">A<span>+</span></div><div><strong>ASIR HUB</strong><small>Tu clase, organizada.</small></div></div>
+      <div class="sidebar-section">TU ESPACIO</div>
+      <div class="nav-item active"><span aria-hidden="true">▦</span> Panel de clase</div>
+      <a class="nav-item" href="#calendario"><span aria-hidden="true">▤</span> Calendario</a>
+      <a class="nav-item" href="#proximas"><span aria-hidden="true">◷</span> Próximas entregas</a>
+      <div class="sidebar-bottom">
+        <div class="sidebar-info"><span class="live-dot" aria-hidden="true"></span><div><strong>Fuente: Aules</strong><small>Sincronización programada</small></div></div>
+        <p>Proyecto creado para compartir fechas académicas. No es una web oficial de Aules.</p>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="mobile-brand">A<span>+</span> <strong>ASIR HUB</strong></div>
+        <div class="topbar-right"><span class="top-pill"><span class="live-dot"></span> Espacio de clase</span><span id="today-label" class="today-label"></span></div>
+      </header>
+
+      <div class="content">
+        <section class="hero">
+          <div class="hero-grid" aria-hidden="true"></div>
+          <div class="hero-content">
+            <span class="eyebrow">TU CENTRO DE ORGANIZACIÓN</span>
+            <h1>Todo lo que tienes<br><em>por delante.</em></h1>
+            <p>Exámenes, prácticas y entregas. Un solo lugar para saber qué viene después.</p>
+            <a href="#calendario" class="hero-button">Ver calendario <span aria-hidden="true">→</span></a>
+          </div>
+          <div class="hero-decoration" aria-hidden="true"><div class="hero-orbit">✦</div><div class="hero-orbit small">✷</div></div>
+        </section>
+
+        <section class="metrics" aria-label="Resumen">
+          <div class="metric"><div class="metric-icon purple" aria-hidden="true">▦</div><div><span class="metric-number" id="metric-total">—</span><span class="metric-label">Próximos eventos</span></div></div>
+          <div class="metric"><div class="metric-icon orange" aria-hidden="true">✎</div><div><span class="metric-number" id="metric-entregas">—</span><span class="metric-label">Entregas pendientes</span></div></div>
+          <div class="metric"><div class="metric-icon pink" aria-hidden="true">◉</div><div><span class="metric-number" id="metric-examenes">—</span><span class="metric-label">Exámenes próximos</span></div></div>
+        </section>
+
+        <div class="columns">
+          <section class="panel calendar-panel" id="calendario" aria-labelledby="calendar-title">
+            <div class="panel-heading"><div><span class="section-eyebrow">PLANIFICACIÓN</span><h2 id="calendar-title">Calendario académico</h2></div><button id="today-button" class="subtle-button" type="button">Hoy</button></div>
+            <div class="calendar-toolbar"><h3 id="month-title"></h3><div class="nav-month"><button id="prev-month" type="button" aria-label="Mes anterior">‹</button><button id="next-month" type="button" aria-label="Mes siguiente">›</button></div></div>
+            <div class="weekday-head"><span>L</span><span>M</span><span>X</span><span>J</span><span>V</span><span>S</span><span>D</span></div>
+            <div id="calendar-grid" class="calendar-grid" aria-label="Calendario mensual"></div>
+            <div class="legend"><span><i class="dot exam"></i>Exámenes</span><span><i class="dot task"></i>Entregas</span><span><i class="dot other"></i>Otros</span></div>
+          </section>
+
+          <section class="panel upcoming-panel" id="proximas" aria-labelledby="upcoming-title">
+            <div class="panel-heading"><div><span class="section-eyebrow">NO TE PIERDAS NADA</span><h2 id="upcoming-title">Próximos eventos</h2></div><span class="count-chip" id="list-count">0</span></div>
+            <label class="search-box"><span aria-hidden="true">⌕</span><input id="event-search" type="search" placeholder="Buscar tarea o examen..." aria-label="Buscar eventos"></label>
+            <div class="filters" role="group" aria-label="Filtrar eventos">
+              <button type="button" class="filter active" data-filter="todos">Todos</button>
+              <button type="button" class="filter" data-filter="examen">Exámenes</button>
+              <button type="button" class="filter" data-filter="entrega">Entregas</button>
+              <button type="button" class="filter" data-filter="otro">Otros</button>
+            </div>
+            <div id="selected-day" class="selected-day" hidden></div>
+            <div id="events-list" class="events-list" aria-live="polite"><div class="empty-state">Cargando eventos...</div></div>
+          </section>
+        </div>
+
+        <footer class="footer"><span>ASIR HUB · Hecho para la clase, con ❤️ y café.</span><span id="last-sync">Esperando sincronización con Aules</span></footer>
+      </div>
+    </main>
+  </div>
+</body>
+</html>
