@@ -85,7 +85,7 @@ function doGet(e) {
       }
       manualEnabled = true;
       manualCal.getEvents(begin, end).slice(0, 1000).forEach(event => {
-        const title = String(event.getTitle() || "").replace(/[\\u0000-\\u001f\\u007f]/g, " ").trim().slice(0, 180);
+        const title = String(event.getTitle() || "").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, 180);
         if (!title) return;
         const allDay = event.isAllDayEvent();
         const start = allDay
