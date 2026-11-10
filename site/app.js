@@ -16,7 +16,6 @@ function safe(s){return String(s??"")}
 function renderMetrics(){
  const future=state.events.filter(e=>eventKey(e)>=currentDay());
  el("metric-total").textContent=future.length;
- el("metric-entregas").textContent=future.filter(e=>e.type==="entrega").length;
  el("metric-examenes").textContent=future.filter(e=>e.type==="examen").length;
 }
 function renderCalendar(){
