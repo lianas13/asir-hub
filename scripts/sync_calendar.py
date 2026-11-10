@@ -28,12 +28,39 @@ def event_type(title):
 
 
 def get_feed(url):
+    # Algunas personas copian la URL que el navegador muestra después de una
+    # redirección de Apps Script (script.googleusercontent.com/macros/echo).
+    # También puede existir la variante /a/macros/ para Google Workspace.
+    # No imprimimos nunca query strings ni tokens.
+    url = url.strip().strip('"').strip("'").strip()
     parsed = urllib.parse.urlparse(url)
-    if (parsed.scheme != "https" or parsed.hostname != "script.google.com"
-            or not parsed.path.startswith("/macros/s/")
-            or not parsed.path.endswith("/exec")
-            or not urllib.parse.parse_qs(parsed.query).get("key")):
-        raise ValueError("GOOGLE_EVENTS_URL no es una URL privada válida de Apps Script")
+    if parsed.scheme != "https" or parsed.hostname not in (
+            "script.google.com", "script.googleusercontent.com"):
+        raise ValueError(
+            "El secreto debe contener un enlace HTTPS de Google Apps Script"
+        )
+    canonical = parsed.hostname == "script.google.com" and (
+        re.fullmatch(r"/macros/s/[^/]+/exec", parsed.path) is not None
+        or re.fullmatch(r"/a/macros/[^/]+/s/[^/]+/exec", parsed.path) is not None
+    )
+    redirected = (
+        parsed.hostname == "script.googleusercontent.com"
+        and parsed.path == "/macros/echo"
+    )
+    if not (canonical or redirected):
+        raise ValueError(
+            "Ruta de Google no reconocida: utiliza la URL de despliegue terminada en /exec?key=..."
+        )
+    if not parsed.query:
+        raise ValueError(
+            "La URL no tiene parámetros privados; copia el enlace completo generado por mostrarEnlacePrivado"
+        )
+    if redirected:
+        print(
+            "Aviso: se está usando el enlace redirigido de Google; "
+            "puede caducar. Para uso permanente, guarda la URL original "
+            "de script.google.com terminada en /exec?key=..."
+        )
 
     request = urllib.request.Request(url, headers={
         "User-Agent": "ASIR-HUB/1.0",
