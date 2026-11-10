@@ -4,7 +4,53 @@ const fmtDate=new Intl.DateTimeFormat("es-ES",{timeZone:timezone,day:"numeric",m
 const fmtLong=new Intl.DateTimeFormat("es-ES",{timeZone:timezone,weekday:"long",day:"numeric",month:"long"});
 const fmtMonth=new Intl.DateTimeFormat("es-ES",{timeZone:timezone,month:"long",year:"numeric"});
 const fmtTime=new Intl.DateTimeFormat("es-ES",{timeZone:timezone,hour:"2-digit",minute:"2-digit"});
-const state={events:[],month:new Date(),filter:"todos",search:"",selected:null,status:"loading",manualEnabled:false};
+const state={events:[],month:new Date(),filter:"todos",subject:"todos",search:"",selected:null,status:"loading",manualEnabled:false,holidays:new Map(),strikes:new Map()};
+const subjectPatterns=[
+ ["Seguridad y Alta Disponibilidad",/seguridad y alta disponibilidad|\bSAD\b/i],
+ ["Servicios de Red e Internet",/servicios de red e internet|\bSRI\b/i],
+ ["Administración de Sistemas Operativos",/administraci[oó]n de sistemas operativos|\bASO\b/i],
+ ["Administración de Bases de Datos",/administraci[oó]n de (sistemas gestores de )?bases de datos|\bASGBD\b|\bASGB\b/i],
+ ["Implantación de Aplicaciones Web",/implantaci[oó]n de aplicaciones web|\bIAW\b/i],
+ ["Proyecto de ASIR",/proyecto (intermodular|de asir)|\bPI\b/i],
+ ["Redes",/\bredes\b|\bsubnetting\b|\brouting\b/i],
+ ["Sistemas",/\bsistemas\b|\bproxmox\b/i]
+];
+function subjectFor(e){
+ if(e.course && String(e.course).trim())return String(e.course).trim().slice(0,80);
+ const title=String(e.title||"").trim();
+ const match=title.match(/^([^:|—–]{3,55})\s*[:|—–]\s*.+/);
+ if(match && !/^(entrega|examen|tarea|pr[aá]ctica|actividad|aviso|recordatorio|plazo)\b/i.test(match[1]))return match[1].trim();
+ for(const [name,pattern] of subjectPatterns)if(pattern.test(title))return name;
+ return "Sin asignatura identificada";
+}
+function matchesFilters(e){
+ return (state.filter==="todos"||e.type===state.filter)
+   && (state.subject==="todos"||subjectFor(e)===state.subject)
+   && (!state.search||(e.title+" "+subjectFor(e)).toLocaleLowerCase("es").includes(state.search));
+}
+function renderSubjectFilter(){
+ const select=el("subject-filter"),previous=state.subject;
+ const names=[...new Set(state.events.map(subjectFor))].sort((a,b)=>a.localeCompare(b,"es"));
+ select.replaceChildren();
+ const first=document.createElement("option");first.value="todos";first.textContent="Todas las asignaturas";select.append(first);
+ for(const name of names){const opt=document.createElement("option");opt.value=name;opt.textContent=name;select.append(opt)}
+ state.subject=names.includes(previous)?previous:"todos";select.value=state.subject;
+}
+async function loadSchoolCalendar(){
+ try{
+  const response=await fetch("./school-calendar.json",{cache:"no-store"});
+  if(!response.ok)throw Error("HTTP "+response.status);
+  const data=await response.json();
+  const holidays=new Map(),strikes=new Map();
+  for(const period of data.holidays||[]){
+   if(!/^\d{4}-\d{2}-\d{2}$/.test(period.start||"")||!/^\d{4}-\d{2}-\d{2}$/.test(period.end||""))continue;
+   const d=new Date(period.start+"T12:00:00Z"),end=new Date(period.end+"T12:00:00Z");
+   for(let i=0;d<=end&&i<370;i++,d.setUTCDate(d.getUTCDate()+1)){holidays.set(d.toISOString().slice(0,10),period.name)}
+  }
+  for(const notice of data.strikes||[])if(/^\d{4}-\d{2}-\d{2}$/.test(notice.date||""))strikes.set(notice.date,notice);
+  state.holidays=holidays;state.strikes=strikes;renderCalendar();renderEvents();
+ }catch(err){console.warn("No se pudo mostrar el calendario escolar:",err)}
+}
 const el=id=>document.getElementById(id);
 function dayKey(d){return new Intl.DateTimeFormat("en-CA",{timeZone:timezone,year:"numeric",month:"2-digit",day:"2-digit"}).format(d)}
 function eventDate(e){return e.all_day?new Date(e.start+"T12:00:00Z"):new Date(e.start)}
@@ -23,16 +69,19 @@ function renderCalendar(){
  el("month-title").textContent=fmtMonth.format(first);
  const grid=el("calendar-grid");grid.replaceChildren();
  const grouped=new Map();
- for(const e of state.events){const k=eventKey(e);if(!grouped.has(k))grouped.set(k,[]);grouped.get(k).push(e);}
+ for(const e of state.events.filter(matchesFilters)){const k=eventKey(e);if(!grouped.has(k))grouped.set(k,[]);grouped.get(k).push(e);}
  for(let n=0;n<cells;n++){
-   const dt=new Date(y,m,1-offset+n,12),key=dayKey(dt),items=grouped.get(key)||[],outside=dt.getMonth()!==m;
-   const b=document.createElement("button");b.type="button";b.className="day"+(outside?" outside":"")+(key===currentDay()?" today":"")+(key===state.selected?" selected":"");
-   b.setAttribute("aria-label",fmtLong.format(dt)+(items.length?", "+items.length+" eventos":""));
+   const dt=new Date(y,m,1-offset+n,12),key=dayKey(dt),items=grouped.get(key)||[],outside=dt.getMonth()!==m,holiday=state.holidays.get(key),strike=state.strikes.get(key);
+   const b=document.createElement("button");b.type="button";b.className="day"+(outside?" outside":"")+(holiday?" holiday":"")+(strike&&!holiday?" strike":"")+(key===currentDay()?" today":"")+(key===state.selected?" selected":"");
+   b.setAttribute("aria-label",fmtLong.format(dt)+(holiday?", no lectivo: "+holiday:"")+(strike?", aviso de huelga: "+strike.name:"")+(items.length?", "+items.length+" eventos":""));
+   if(holiday||strike)b.title=holiday?holiday:(strike.name+" — No implica suspensión automática de clases");
    b.setAttribute("aria-pressed",String(key===state.selected));
    const number=document.createElement("span");number.className="day-number";number.textContent=dt.getDate();
    const dots=document.createElement("span");dots.className="dots";
    for(const e of items.slice(0,4)){const d=document.createElement("i");d.className="dot "+(e.type==="examen"?"exam":e.type==="entrega"?"task":"other");dots.append(d);}
-   b.append(number,dots);
+   b.append(number);
+   if(holiday||strike){const flag=document.createElement("span");flag.className="day-flag";flag.textContent=holiday?"Sin clase":"Huelga";b.append(flag)}
+   b.append(dots);
    b.addEventListener("click",()=>{state.selected=state.selected===key?null:key;if(outside)state.month=new Date(dt.getFullYear(),dt.getMonth(),1);renderCalendar();renderEvents();});
    grid.append(b);
  }
@@ -53,17 +102,17 @@ function eventElement(e){
  row.append(stamp,details,badge);return row;
 }
 function renderEvents(){
- let arr=state.events.filter(e=>eventKey(e)>=(state.selected||currentDay()));
+ let arr=state.events.filter(e=>eventKey(e)>=(state.selected||currentDay())&&matchesFilters(e));
  if(state.selected)arr=arr.filter(e=>eventKey(e)===state.selected);
- if(state.filter!=="todos")arr=arr.filter(e=>e.type===state.filter);
- if(state.search)arr=arr.filter(e=>(e.title+" "+(e.course||"")).toLocaleLowerCase("es").includes(state.search));
  const box=el("events-list");box.replaceChildren();
  el("list-count").textContent=String(arr.length);
  const selected=el("selected-day");
  selected.hidden=!state.selected;
  if(state.selected){
   selected.replaceChildren();
-  const sp=document.createElement("span");sp.textContent="Eventos del "+fmtLong.format(new Date(state.selected+"T12:00:00Z"));
+  const sp=document.createElement("span");
+  const holiday=state.holidays.get(state.selected),strike=state.strikes.get(state.selected);
+  sp.textContent="Eventos del "+fmtLong.format(new Date(state.selected+"T12:00:00Z"))+(holiday?" · Sin clase: "+holiday:"")+(strike?" · "+strike.name+" (consulta al centro)":"");
   const clear=document.createElement("button");clear.type="button";clear.textContent="Quitar ×";clear.addEventListener("click",()=>{state.selected=null;renderCalendar();renderEvents()});
   selected.append(sp,clear);
  }
@@ -84,6 +133,7 @@ async function load(){
   const data=await response.json();
   if(!Array.isArray(data.events))throw new Error("Formato inválido");
   state.events=data.events.filter(e=>e&&typeof e.title==="string"&&typeof e.start==="string"&&["examen","entrega","otro"].includes(e.type)&&(!e.all_day||/^\d{4}-\d{2}-\d{2}$/.test(e.start))&&!Number.isNaN(eventDate(e).getTime())).sort((a,b)=>eventDate(a)-eventDate(b));
+  renderSubjectFilter();
   state.status=data.status==="config"?"config":"ready";
   state.manualEnabled=data.manual_enabled===true;
   el("add-exam").hidden=!state.manualEnabled;
@@ -128,8 +178,10 @@ function init(){
  el("prev-month").addEventListener("click",()=>{state.month=new Date(state.month.getFullYear(),state.month.getMonth()-1,1);renderCalendar()});
  el("next-month").addEventListener("click",()=>{state.month=new Date(state.month.getFullYear(),state.month.getMonth()+1,1);renderCalendar()});
  el("today-button").addEventListener("click",()=>{const d=new Date();state.month=new Date(d.getFullYear(),d.getMonth(),1);state.selected=null;renderCalendar();renderEvents()});
- el("event-search").addEventListener("input",e=>{state.search=e.target.value.trim().toLocaleLowerCase("es");renderEvents()});
- document.querySelectorAll("[data-filter]").forEach(button=>button.addEventListener("click",()=>{state.filter=button.dataset.filter;document.querySelectorAll("[data-filter]").forEach(b=>b.classList.toggle("active",b===button));renderEvents()}));
+ el("event-search").addEventListener("input",e=>{state.search=e.target.value.trim().toLocaleLowerCase("es");renderCalendar();renderEvents()});
+ el("subject-filter").addEventListener("change",e=>{state.subject=e.target.value;renderCalendar();renderEvents()});
+ document.querySelectorAll("[data-filter]").forEach(button=>button.addEventListener("click",()=>{state.filter=button.dataset.filter;document.querySelectorAll("[data-filter]").forEach(b=>b.classList.toggle("active",b===button));renderCalendar();renderEvents()}));
  load();
+ loadSchoolCalendar();
 }
 document.addEventListener("DOMContentLoaded",init);
