@@ -4,7 +4,7 @@ const fmtDate=new Intl.DateTimeFormat("es-ES",{timeZone:timezone,day:"numeric",m
 const fmtLong=new Intl.DateTimeFormat("es-ES",{timeZone:timezone,weekday:"long",day:"numeric",month:"long"});
 const fmtMonth=new Intl.DateTimeFormat("es-ES",{timeZone:timezone,month:"long",year:"numeric"});
 const fmtTime=new Intl.DateTimeFormat("es-ES",{timeZone:timezone,hour:"2-digit",minute:"2-digit"});
-const state={events:[],month:new Date(),filter:"todos",search:"",selected:null,status:"loading"};
+const state={events:[],month:new Date(),filter:"todos",search:"",selected:null,status:"loading",manualEnabled:false};
 const el=id=>document.getElementById(id);
 function dayKey(d){return new Intl.DateTimeFormat("en-CA",{timeZone:timezone,year:"numeric",month:"2-digit",day:"2-digit"}).format(d)}
 function eventDate(e){return e.all_day?new Date(e.start+"T12:00:00Z"):new Date(e.start)}
@@ -86,6 +86,8 @@ async function load(){
   if(!Array.isArray(data.events))throw new Error("Formato inválido");
   state.events=data.events.filter(e=>e&&typeof e.title==="string"&&typeof e.start==="string"&&["examen","entrega","otro"].includes(e.type)&&(!e.all_day||/^\d{4}-\d{2}-\d{2}$/.test(e.start))&&!Number.isNaN(eventDate(e).getTime())).sort((a,b)=>eventDate(a)-eventDate(b));
   state.status=data.status==="config"?"config":"ready";
+  state.manualEnabled=data.manual_enabled===true;
+  el("add-exam").hidden=!state.manualEnabled;
   const stamp=data.updated_at?new Date(data.updated_at):null;
   el("last-sync").textContent=state.status==="config"?"Pendiente de configurar la sincronización":stamp&&!Number.isNaN(stamp.getTime())?"Datos actualizados: "+new Intl.DateTimeFormat("es-ES",{dateStyle:"short",timeStyle:"short",timeZone:timezone}).format(stamp):"Datos de Aules";
  }catch(err){
@@ -93,9 +95,38 @@ async function load(){
  }
  renderMetrics();renderCalendar();renderEvents();
 }
+function installExamForm(){
+ const dialog=el("add-exam-dialog"),form=el("add-exam-form");
+ el("add-exam").addEventListener("click",()=>{form.reset();dialog.showModal();el("exam-name").focus()});
+ const close=()=>dialog.close();
+ el("close-exam").addEventListener("click",close);
+ el("cancel-exam").addEventListener("click",close);
+ dialog.addEventListener("click",e=>{if(e.target===dialog)close()});
+ form.addEventListener("submit",e=>{
+  e.preventDefault();
+  if(!form.reportValidity())return;
+  const title=el("exam-name").value.trim().slice(0,100);
+  const day=el("exam-date").value;
+  if(!title||!/^\\d{4}-\\d{2}-\\d{2}$/.test(day))return;
+  // El formato de Calendar usa fecha final exclusiva para eventos de día completo.
+  const end=new Date(day+"T12:00:00Z");
+  end.setUTCDate(end.getUTCDate()+1);
+  const next=end.toISOString().slice(0,10).replace(/-/g,"");
+  const first=day.replace(/-/g,"");
+  const url=new URL("https://calendar.google.com/calendar/render");
+  url.searchParams.set("action","TEMPLATE");
+  url.searchParams.set("text",title);
+  url.searchParams.set("dates",first+"/"+next);
+  url.searchParams.set("details","Examen compartido de clase — ASIR HUB. Selecciona el calendario ASIR HUB - Exámenes antes de guardar.");
+  const opened=window.open(url.toString(),"_blank","noopener,noreferrer");
+  if(opened)close();
+  else window.location.assign(url.toString());
+ });
+}
 function init(){
  const now=new Date();state.month=new Date(now.getFullYear(),now.getMonth(),1);
  el("today-label").textContent=fmtLong.format(now);
+ installExamForm();
  el("prev-month").addEventListener("click",()=>{state.month=new Date(state.month.getFullYear(),state.month.getMonth()-1,1);renderCalendar()});
  el("next-month").addEventListener("click",()=>{state.month=new Date(state.month.getFullYear(),state.month.getMonth()+1,1);renderCalendar()});
  el("today-button").addEventListener("click",()=>{const d=new Date();state.month=new Date(d.getFullYear(),d.getMonth(),1);state.selected=null;renderCalendar();renderEvents()});
