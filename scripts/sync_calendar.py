@@ -130,7 +130,7 @@ def get_feed(url):
                 raise ValueError("Google no autoriza la lectura (comprueba la implementación y la clave)")
             if not isinstance(data.get("events"), list):
                 raise ValueError("Google no ha devuelto una lista de eventos")
-            return data["events"]
+            return data
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, RuntimeError) as exc:
             if isinstance(exc, RuntimeError):
                 detail = str(exc)
@@ -173,7 +173,7 @@ def normalize(events):
         identifier = hashlib.sha256((title + "|" + start_out).encode()).hexdigest()[:16]
         normalized.append({
             "id": identifier, "title": title, "start": start_out,
-            "all_day": all_day, "type": event_type(title)
+            "all_day": all_day, "type": ("examen" if item.get("source") == "manual" and item.get("type") == "examen" else event_type(title))
         })
     return sorted({e["id"]: e for e in normalized}.values(), key=lambda e: e["start"])
 
@@ -184,12 +184,14 @@ def main():
         print("No se ha configurado GOOGLE_EVENTS_URL. Publicando la web sin eventos.")
         payload = {"status": "config", "updated_at": None, "events": []}
     else:
-        events = normalize(get_feed(url))
+        fetched = get_feed(url)
+        events = normalize(fetched["events"])
         print(f"Leídos {len(events)} eventos académicos desde Google Calendar.")
         payload = {
             "status": "ready",
             "updated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "events": events,
+            "manual_enabled": fetched.get("manual_enabled") is True,
         }
 
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
