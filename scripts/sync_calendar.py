@@ -111,7 +111,17 @@ def get_feed(url):
         elif path.endswith("/dev"):
             print("Diagnóstico seguro: URL de desarrollo /dev. Necesitas la implementación /exec.")
         else:
-            print("Diagnóstico seguro: ruta de Apps Script no estándar (sin revelar identificadores).")
+            # Distintas cuentas de Google pueden anteponer rutas adicionales.
+            # Si hay un ID de implementación reconocible al final, recuperamos
+            # su URL canónica sin revelar el ID ni los parámetros privados.
+            deployment = re.search(r"/s/([A-Za-z0-9_-]{20,})/exec/?$", path)
+            if deployment:
+                normalized = "/macros/s/" + deployment.group(1) + "/exec"
+                url = urllib.parse.urlunparse(parsed._replace(path=normalized))
+                print("Diagnóstico seguro: ruta con prefijos de cuenta normalizada a /macros/s/.../exec")
+            else:
+                print("Diagnóstico seguro: la URL de GitHub NO tiene un identificador de implementación /s/ID/exec reconocible.")
+                print("Solución: copiar la URL de Implementar > Gestionar implementaciones, añadir ?key=CLAVE y actualizar GOOGLE_EVENTS_URL.")
 
     for attempt in range(4):
         try:
