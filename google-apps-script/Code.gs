@@ -5,6 +5,7 @@
  * Configuración en Ajustes del proyecto > Propiedades del script:
  *   ASIR_CALENDAR_ID: ID exacto del calendario suscrito desde Aules
  *   ASIR_FEED_KEY: se crea ejecutando crearClave() una vez
+ *   ASIR_MANUAL_CALENDAR_ID: opcional, calendario compartido "ASIR HUB - Exámenes"
  */
 
 const HUSO = "Europe/Madrid";
@@ -72,7 +73,34 @@ function doGet(e) {
       };
     }).filter(event => event.title.length > 0);
 
-    return responder({status: "ready", events: events});
+    // Calendario independiente de edición manual. Solo quienes tengan
+    // permiso de edición pueden guardar fechas allí desde Google Calendar.
+    // Nunca utilizar el calendario principal ni el mismo calendario Aules.
+    const manualId = props.getProperty("ASIR_MANUAL_CALENDAR_ID");
+    let manualEnabled = false;
+    if (manualId) {
+      const manualCal = CalendarApp.getCalendarById(manualId);
+      if (!manualCal || manualCal.isMyPrimaryCalendar() || manualId === calendarId) {
+        return responder({status: "error", error: "El calendario manual es inválido, principal o idéntico a Aules"});
+      }
+      manualEnabled = true;
+      manualCal.getEvents(begin, end).slice(0, 1000).forEach(event => {
+        const title = String(event.getTitle() || "").replace(/[\\u0000-\\u001f\\u007f]/g, " ").trim().slice(0, 180);
+        if (!title) return;
+        const allDay = event.isAllDayEvent();
+        const start = allDay
+          ? Utilities.formatDate(event.getAllDayStartDate(), HUSO, "yyyy-MM-dd")
+          : event.getStartTime().toISOString();
+        events.push({
+          title: title,
+          start: start,
+          all_day: allDay,
+          type: "examen",
+          source: "manual"
+        });
+      });
+    }
+    return responder({status: "ready", manual_enabled: manualEnabled, events: events});
   } catch (error) {
     console.error("ASIR HUB: error al leer el calendario: " + error);
     return responder({status: "error", error: "No se pudieron leer los eventos"});
