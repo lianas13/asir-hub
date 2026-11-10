@@ -1,100 +1,129 @@
 #!/usr/bin/env python3
-"""Leer eventos de Aules sin publicar URL privada, descripciones ni identificadores."""
+"""ASIR HUB: copia únicamente títulos y fechas del calendario Google autorizado.
+
+La URL privada de Apps Script se lee de GOOGLE_EVENTS_URL y no se registra.
+No se publican descripciones, URLs, correos ni identificadores de Google.
+"""
 import hashlib
 import json
 import os
 import re
 import sys
-import urllib.request
-import urllib.error
-import socket
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
-from icalendar import Calendar
 
 ZONE = ZoneInfo("Europe/Madrid")
 OUTPUT = Path(__file__).resolve().parents[1] / "site" / "events.json"
 EXAM = re.compile(r"ex[aá]men|exam\b|prueba\s+(?:escrita|final)|control\b|parcial\b", re.I)
 TASK = re.compile(r"tarea|entrega|actividad|pr[aá]ctica|assignment|due\b|vencimiento|deberes|trabajo", re.I)
 
-def safe_title(value):
-    return re.sub(r"\s+", " ", re.sub(r"[\x00-\x1f\x7f]", " ", str(value or ""))).strip()[:180]
 
-def event_kind(title):
+def event_type(title):
     return "examen" if EXAM.search(title) else "entrega" if TASK.search(title) else "otro"
 
-def read_events(raw):
-    cal = Calendar.from_ical(raw)
+
+def get_feed(url):
+    parsed = urllib.parse.urlparse(url)
+    if (parsed.scheme != "https" or parsed.hostname != "script.google.com"
+            or not parsed.path.startswith("/macros/s/")
+            or not parsed.path.endswith("/exec")
+            or not urllib.parse.parse_qs(parsed.query).get("key")):
+        raise ValueError("GOOGLE_EVENTS_URL no es una URL privada válida de Apps Script")
+
+    request = urllib.request.Request(url, headers={
+        "User-Agent": "ASIR-HUB/1.0",
+        "Accept": "application/json",
+    })
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(request, timeout=40) as response:
+                final_host = urllib.parse.urlparse(response.geturl()).hostname
+                if final_host not in ("script.google.com", "script.googleusercontent.com"):
+                    raise ValueError("Redirección fuera de los servidores de Google")
+                raw = response.read(2_000_001)
+                if len(raw) > 2_000_000:
+                    raise ValueError("Respuesta demasiado grande")
+            data = json.loads(raw)
+            if not isinstance(data, dict) or data.get("status") != "ready":
+                raise ValueError("Google no ha autorizado la lectura del calendario")
+            if not isinstance(data.get("events"), list):
+                raise ValueError("La respuesta no contiene una lista de eventos")
+            return data["events"]
+        except urllib.error.HTTPError as exc:
+            if exc.code not in (404, 408, 429, 500, 502, 503, 504) or attempt == 2:
+                raise RuntimeError(f"Google ha devuelto HTTP {exc.code}") from None
+        except (urllib.error.URLError, TimeoutError) as exc:
+            if attempt == 2:
+                raise RuntimeError("No se pudo establecer conexión con Google") from None
+        except json.JSONDecodeError:
+            if attempt == 2:
+                raise RuntimeError("Google devolvió una respuesta que no es JSON") from None
+        print(f"Reintentando lectura de Google Calendar ({attempt + 2}/3).")
+        time.sleep(2 * (attempt + 1))
+    raise RuntimeError("Error de conexión")
+
+
+def normalize(events):
     today = datetime.now(ZONE).date()
-    events = []
-    allow = [x.strip().casefold() for x in os.environ.get("AULES_TITLE_ALLOWLIST", "").split("||") if x.strip()]
-    for item in cal.walk("VEVENT"):
-        title = safe_title(item.get("SUMMARY", ""))
-        dt = item.get("DTSTART")
-        if not title or dt is None or (allow and not any(term in title.casefold() for term in allow)):
+    normalized = []
+    for item in events[:1500]:
+        if not isinstance(item, dict):
             continue
-        start = dt.dt
-        if not isinstance(start, (date, datetime)):
+        title = re.sub(r"[\x00-\x1f\x7f]", " ", str(item.get("title", ""))).strip()[:180]
+        start = str(item.get("start", ""))
+        all_day = item.get("all_day") is True
+        if not title:
             continue
-        local_day = start.astimezone(ZONE).date() if isinstance(start, datetime) and start.tzinfo else (start.date() if isinstance(start, datetime) else start)
-        if not (today - timedelta(days=60) <= local_day <= today + timedelta(days=370)):
+        try:
+            if all_day:
+                when = date.fromisoformat(start)
+                start_out = when.isoformat()
+            else:
+                parsed = datetime.fromisoformat(start.replace("Z", "+00:00"))
+                if parsed.tzinfo is None:
+                    continue
+                when = parsed.astimezone(ZONE).date()
+                start_out = parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+        except ValueError:
             continue
-        all_day = not isinstance(start, datetime)
-        if not all_day:
-            if start.tzinfo is None:
-                start = start.replace(tzinfo=ZONE)
-            start_str = start.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
-        else:
-            start_str = start.isoformat()
-        identifier = hashlib.sha256((title + "|" + start_str).encode()).hexdigest()[:16]
-        events.append({"id": identifier, "title": title, "start": start_str, "all_day": all_day, "type": event_kind(title)})
-    return sorted({e["id"]: e for e in events}.values(), key=lambda e: e["start"])
+        if not (today - timedelta(days=60) <= when <= today + timedelta(days=370)):
+            continue
+        identifier = hashlib.sha256((title + "|" + start_out).encode()).hexdigest()[:16]
+        normalized.append({
+            "id": identifier, "title": title, "start": start_out,
+            "all_day": all_day, "type": event_type(title)
+        })
+    return sorted({e["id"]: e for e in normalized}.values(), key=lambda e: e["start"])
+
 
 def main():
-    url = os.environ.get("AULES_ICS_URL", "").strip()
+    url = os.environ.get("GOOGLE_EVENTS_URL", "").strip()
     if not url:
+        print("No se ha configurado GOOGLE_EVENTS_URL. Publicando la web sin eventos.")
         payload = {"status": "config", "updated_at": None, "events": []}
-        print("Falta configurar AULES_ICS_URL: se mostrará un calendario vacío.")
     else:
-        if not url.startswith("https://"):
-            raise ValueError("AULES_ICS_URL debe usar HTTPS")
-        request = urllib.request.Request(url, headers={"User-Agent": "ASIR-HUB/1.0", "Accept": "text/calendar"})
-        raw = None
-        for attempt in range(2):
-            try:
-                with urllib.request.urlopen(request, timeout=45) as response:
-                    if not response.geturl().startswith("https://"):
-                        raise ValueError("Redirección insegura")
-                    raw = response.read(5_000_001)
-                break
-            except urllib.error.HTTPError as exc:
-                raise RuntimeError(f"Aules ha devuelto HTTP {exc.code}. Comprueba que la URL ICS está activa.") from None
-            except (urllib.error.URLError, TimeoutError, socket.timeout) as exc:
-                reason = getattr(exc, "reason", exc)
-                if isinstance(reason, (socket.timeout, TimeoutError)):
-                    detail = "tiempo de espera agotado al contactar con Aules"
-                elif isinstance(reason, socket.gaierror):
-                    detail = "error de DNS al resolver el servidor de Aules"
-                else:
-                    detail = f"error de conexión ({type(reason).__name__})"
-                if attempt == 1:
-                    raise RuntimeError(detail) from None
-                print("No se pudo contactar con Aules. Reintentando en 3 segundos.")
-                time.sleep(3)
-        if len(raw) > 5_000_000 or b"BEGIN:VCALENDAR" not in raw[:1000]:
-            raise ValueError("La respuesta no parece un calendario ICS válido de menos de 5 MB")
-        events = read_events(raw)
-        payload = {"status": "ready", "updated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"), "events": events}
-        print(f"Importados {len(events)} eventos.")
+        events = normalize(get_feed(url))
+        print(f"Leídos {len(events)} eventos académicos desde Google Calendar.")
+        payload = {
+            "status": "ready",
+            "updated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "events": events,
+        }
+
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
 
 if __name__ == "__main__":
     try:
         main()
     except Exception as exc:
-        detail = str(exc) if isinstance(exc, RuntimeError) else type(exc).__name__
-        print(f"Error al importar Aules: {detail}. Revisa el secret AULES_ICS_URL.", file=sys.stderr)
+        # No mostramos jamás la URL del feed ni errores que puedan contenerla.
+        msg = str(exc) if isinstance(exc, (RuntimeError, ValueError)) else type(exc).__name__
+        print(f"Error seguro al leer Google Calendar: {msg}", file=sys.stderr)
         sys.exit(1)
