@@ -6,6 +6,9 @@ import os
 import re
 import sys
 import urllib.request
+import urllib.error
+import socket
+import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -58,10 +61,28 @@ def main():
         if not url.startswith("https://"):
             raise ValueError("AULES_ICS_URL debe usar HTTPS")
         request = urllib.request.Request(url, headers={"User-Agent": "ASIR-HUB/1.0", "Accept": "text/calendar"})
-        with urllib.request.urlopen(request, timeout=25) as response:
-            if not response.geturl().startswith("https://"):
-                raise ValueError("Redirección insegura")
-            raw = response.read(5_000_001)
+        raw = None
+        for attempt in range(2):
+            try:
+                with urllib.request.urlopen(request, timeout=45) as response:
+                    if not response.geturl().startswith("https://"):
+                        raise ValueError("Redirección insegura")
+                    raw = response.read(5_000_001)
+                break
+            except urllib.error.HTTPError as exc:
+                raise RuntimeError(f"Aules ha devuelto HTTP {exc.code}. Comprueba que la URL ICS está activa.") from None
+            except (urllib.error.URLError, TimeoutError, socket.timeout) as exc:
+                reason = getattr(exc, "reason", exc)
+                if isinstance(reason, (socket.timeout, TimeoutError)):
+                    detail = "tiempo de espera agotado al contactar con Aules"
+                elif isinstance(reason, socket.gaierror):
+                    detail = "error de DNS al resolver el servidor de Aules"
+                else:
+                    detail = f"error de conexión ({type(reason).__name__})"
+                if attempt == 1:
+                    raise RuntimeError(detail) from None
+                print("No se pudo contactar con Aules. Reintentando en 3 segundos.")
+                time.sleep(3)
         if len(raw) > 5_000_000 or b"BEGIN:VCALENDAR" not in raw[:1000]:
             raise ValueError("La respuesta no parece un calendario ICS válido de menos de 5 MB")
         events = read_events(raw)
@@ -74,5 +95,6 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as exc:
-        print(f"Error al importar Aules ({type(exc).__name__}). Comprueba el secret y la exportación ICS.", file=sys.stderr)
+        detail = str(exc) if isinstance(exc, RuntimeError) else type(exc).__name__
+        print(f"Error al importar Aules: {detail}. Revisa el secret AULES_ICS_URL.", file=sys.stderr)
         sys.exit(1)
