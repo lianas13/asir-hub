@@ -94,7 +94,24 @@ def get_feed(url):
     if not parsed.path or parsed.path == "/":
         raise ValueError("El enlace no contiene la dirección de la aplicación web")
     if parsed.hostname == "script.googleusercontent.com":
-        print("Aviso: el secreto apunta a un enlace temporal de Google; guarda la URL original /exec?key=...")
+        print("Diagnóstico seguro: URL de redirección temporal de Google, no enlace original /exec.")
+    else:
+        # Google a veces añade el índice de cuenta /u/0 a la dirección,
+        # que funciona en el navegador pero puede fallar sin sesión.
+        path = parsed.path
+        indexed = re.fullmatch(r"/macros/u/[0-9]+/s/([^/]+)/exec", path)
+        if indexed:
+            clean_path = "/macros/s/" + indexed.group(1) + "/exec"
+            url = urllib.parse.urlunparse(parsed._replace(path=clean_path))
+            print("Diagnóstico seguro: URL con índice de cuenta, normalizada a /macros/s/.../exec")
+        elif re.fullmatch(r"/macros/s/[^/]+/exec", path):
+            print("Diagnóstico seguro: URL canónica /macros/s/.../exec")
+        elif re.fullmatch(r"/a/macros/[^/]+/s/[^/]+/exec", path):
+            print("Diagnóstico seguro: URL Workspace /a/macros/.../exec")
+        elif path.endswith("/dev"):
+            print("Diagnóstico seguro: URL de desarrollo /dev. Necesitas la implementación /exec.")
+        else:
+            print("Diagnóstico seguro: ruta de Apps Script no estándar (sin revelar identificadores).")
 
     for attempt in range(4):
         try:
