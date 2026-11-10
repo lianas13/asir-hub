@@ -41,6 +41,18 @@
           <div class="hero-decoration" aria-hidden="true"><div class="hero-orbit">✦</div><div class="hero-orbit small">✷</div></div>
         </section>
 
+        <section class="quick-links" aria-label="Accesos académicos">
+          <div class="quick-links-title"><span class="section-eyebrow">A UN CLIC</span><strong>Accesos de clase</strong></div>
+          <div class="quick-links-grid">
+            <a class="quick-link quick-link-aules" href="https://portal.edu.gva.es/aules/" target="_blank" rel="noopener noreferrer" aria-label="Abrir Aules en otra pestaña">
+              <span class="quick-link-icon" aria-hidden="true">📘</span><span class="quick-link-copy"><strong>Aules</strong><small>Tareas y materiales</small></span><span class="quick-link-arrow" aria-hidden="true">↗</span>
+            </a>
+            <a class="quick-link quick-link-itaca" href="https://familia2.edu.gva.es/" target="_blank" rel="noopener noreferrer" aria-label="Abrir Ítaca Web Familia en otra pestaña">
+              <span class="quick-link-icon" aria-hidden="true">🎓</span><span class="quick-link-copy"><strong>Ítaca · Web Familia</strong><small>Notas e información académica</small></span><span class="quick-link-arrow" aria-hidden="true">↗</span>
+            </a>
+          </div>
+        </section>
+
         <section class="metrics" aria-label="Resumen">
           <div class="metric"><div class="metric-icon purple" aria-hidden="true">▦</div><div><span class="metric-number" id="metric-total">—</span><span class="metric-label">Próximas fechas</span></div></div>
           
@@ -53,13 +65,18 @@
             <div class="calendar-toolbar"><h3 id="month-title"></h3><div class="nav-month"><button id="prev-month" type="button" aria-label="Mes anterior">‹</button><button id="next-month" type="button" aria-label="Mes siguiente">›</button></div></div>
             <div class="weekday-head"><span>L</span><span>M</span><span>X</span><span>J</span><span>V</span><span>S</span><span>D</span></div>
             <div id="calendar-grid" class="calendar-grid" aria-label="Calendario mensual"></div>
-            <div class="legend"><span><i class="dot exam"></i>Exámenes</span><span><i class="dot task"></i>Entregas</span><span><i class="dot other"></i>Otros</span></div>
+            <div class="legend"><span><i class="dot exam"></i>Exámenes</span><span><i class="dot task"></i>Entregas</span><span><i class="dot other"></i>Otros</span><span><i class="dot holiday"></i>No lectivo</span><span><i class="dot strike"></i>Aviso de huelga</span></div><p class="school-calendar-note">Los avisos de huelga no significan automáticamente que se suspendan las clases. Consulta el centro.</p>
           </section>
 
           <section class="panel upcoming-panel" id="proximas" aria-labelledby="upcoming-title">
             <div class="panel-heading"><div><span class="section-eyebrow">NO TE PIERDAS NADA</span><h2 id="upcoming-title">Próximos eventos</h2></div><span class="count-chip" id="list-count">0</span></div>
             <button id="add-exam" type="button" class="add-exam-button" hidden>＋ Añadir examen manual</button>
             <label class="search-box"><span aria-hidden="true">⌕</span><input id="event-search" type="search" placeholder="Buscar tarea o examen..." aria-label="Buscar eventos"></label>
+            <label class="subject-filter">Asignatura
+              <select id="subject-filter" aria-label="Filtrar por asignatura">
+                <option value="todos">Todas las asignaturas</option>
+              </select>
+            </label>
             <div class="filters" role="group" aria-label="Filtrar eventos">
               <button type="button" class="filter active" data-filter="todos">Todos</button>
               <button type="button" class="filter" data-filter="examen">Exámenes</button>
