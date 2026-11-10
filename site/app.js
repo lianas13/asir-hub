@@ -107,7 +107,7 @@ function installExamForm(){
   if(!form.reportValidity())return;
   const title=el("exam-name").value.trim().slice(0,100);
   const day=el("exam-date").value;
-  if(!title||!/^\\d{4}-\\d{2}-\\d{2}$/.test(day))return;
+  if(!title||!/^\d{4}-\d{2}-\d{2}$/.test(day))return;
   // El formato de Calendar usa fecha final exclusiva para eventos de día completo.
   const end=new Date(day+"T12:00:00Z");
   end.setUTCDate(end.getUTCDate()+1);
@@ -118,9 +118,8 @@ function installExamForm(){
   url.searchParams.set("text",title);
   url.searchParams.set("dates",first+"/"+next);
   url.searchParams.set("details","Examen compartido de clase — ASIR HUB. Selecciona el calendario ASIR HUB - Exámenes antes de guardar.");
-  const opened=window.open(url.toString(),"_blank","noopener,noreferrer");
-  if(opened)close();
-  else window.location.assign(url.toString());
+  close();
+  window.location.assign(url.toString());
  });
 }
 function init(){
